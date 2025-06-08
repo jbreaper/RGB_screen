@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module name="TOP" T_Register="32(0)" T_Lut="129(0)">
+ <SubModule name="chip_pll"/>
+ <SubModule name="VGAMod_inst" Register="32" Lut="129" T_Register="32(32)" T_Lut="129(129)"/>
+</Module>
