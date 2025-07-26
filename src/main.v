@@ -1,44 +1,46 @@
-module TOP //Name TOP module
+module TOP
 (
-    input           nRST,
-    input           XTAL_IN,
+    input           nRST,           // Active low reset
+    input           XTAL_IN,        // Input clock
 
-    output          LCD_CLK,
-    output          LCD_HYNC,
-    output          LCD_SYNC,
-    output          LCD_DEN,
+    // LCD Interface signals
+    output          LCD_CLK,        // LCD clock
+    output          LCD_HYNC,       // Horizontal sync
+    output          LCD_SYNC,       // Vertical sync
+    output          LCD_DEN,        // Data enable
 
-    output  [4:0]   LCD_R,
-    output  [5:0]   LCD_G,
-    output  [4:0]   LCD_B
+    // LCD RGB color signals
+    output  [4:0]   LCD_R,         // Red channel   (5 bits)
+    output  [5:0]   LCD_G,         // Green channel (6 bits)
+    output  [4:0]   LCD_B          // Blue channel  (5 bits)
+);
 
-); // list ports
+    // Internal clock signals
+    wire        CLK_SYS;           // System clock (200MHz)
+    wire        CLK_PIX;           // Pixel clock (33MHz)
 
-    wire        CLK_SYS;
-    wire        CLK_PIX;
-
-    //instantiate pll
+    // PLL instance for clock generation
     Gowin_rPLL chip_pll(
-        .clkout(CLK_SYS),  //output clkout     //200M
-        .clkoutd(CLK_PIX), //output clkoutd   //33.00M
-        .clkin(XTAL_IN)    //input clkin
-    );	
+        .clkout(CLK_SYS),          // 200MHz system clock output
+        .clkoutd(CLK_PIX),         // 33MHz pixel clock output
+        .clkin(XTAL_IN)            // Input clock
+    );
 
-    VGAMod	VGAMod_inst //instantiate vga driver
+    // VGA controller instance
+    VGAMod	VGAMod_inst
     (
         .CLK        (   CLK_SYS     ),
         .nRST       (   nRST        ),
-
         .PixelClk   (   CLK_PIX     ),
         .LCD_DE     (   LCD_DEN     ),
         .LCD_HSYNC  (   LCD_HYNC    ),
         .LCD_VSYNC  (   LCD_SYNC    ),
-
         .LCD_B      (   LCD_B       ),
         .LCD_G      (   LCD_G       ),
         .LCD_R      (   LCD_R       )
     );
 
+    // Connect pixel clock to LCD clock
     assign      LCD_CLK     =   CLK_PIX;
 
 endmodule

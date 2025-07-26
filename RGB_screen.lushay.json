@@ -1,0 +1,8 @@
+{
+    "name": "RGB_screen",
+    "includedFiles": "all",
+    "constraintsFile": "./src/RGB_screen.cst",
+    "top": "TOP",
+    "board": "tangnano9k",
+    "programMode": "ram"
+}
