@@ -4,3 +4,4 @@ ___module_export.json
 RGB_screen_pnr.json
 RGB_screen.fs
 RGB_screen.json
+/src/gowin_rpll/gowin_rpll_tmp.v
