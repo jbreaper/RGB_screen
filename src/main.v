@@ -7,6 +7,7 @@ module TOP //Name TOP module
     output          LCD_HYNC,
     output          LCD_SYNC,
     output          LCD_DEN,
+
     output  [4:0]   LCD_R,
     output  [5:0]   LCD_G,
     output  [4:0]   LCD_B

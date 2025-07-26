@@ -14,85 +14,74 @@ module VGAMod
     output          [4:0]   LCD_R
 );
 
+    // Horizen count to Hsync, then next Horizen line.
 
-    localparam      H_BackPorch = 16'd43;
-    localparam      H_Pluse     = 16'd1; 
-    localparam      WidthPixel  = 16'd480;
-    localparam      H_FrontPorch= 16'd4;
+    parameter       H_Pixel_Valid    = 16'd480; 
+    parameter       H_FrontPorch     = 16'd50;
+    parameter       H_BackPorch      = 16'd30;  
 
-    localparam      V_BackPorch = 16'd12; //0 or 45
-    localparam      V_Pluse     = 16'd5; 
-    localparam      HightPixel  = 16'd272;
-    localparam      V_FrontPorch= 16'd4; //45 or 0
+    parameter       PixelForHS       = H_Pixel_Valid + H_FrontPorch + H_BackPorch;
 
-    localparam      PixelForHS  =   WidthPixel + H_BackPorch + H_FrontPorch;
-    localparam      LineForVS   =   HightPixel + V_BackPorch + V_FrontPorch;
+    parameter       V_Pixel_Valid    = 16'd272; 
+    parameter       V_FrontPorch     = 16'd20;  
+    parameter       V_BackPorch      = 16'd5;    
 
+    parameter       PixelForVS       = V_Pixel_Valid + V_FrontPorch + V_BackPorch;
 
-    reg [15:0] LineCount;
-    reg [15:0] PixelCount;
+    // Horizen pixel count
 
-    reg [9:0]  Data_R;
-    reg [9:0]  Data_G;
-    reg [9:0]  Data_B;
+    reg         [15:0]  H_PixelCount;
+    reg         [15:0]  V_PixelCount;
 
     always @(  posedge PixelClk or negedge nRST  )begin
         if( !nRST ) begin
-            LineCount       <=  16'b0;    
-            PixelCount      <=  16'b0;
+            V_PixelCount      <=  16'b0;    
+            H_PixelCount      <=  16'b0;
             end
-        else if(  PixelCount  ==  PixelForHS ) begin
-            PixelCount      <=  16'b0;
-            LineCount       <=  LineCount + 1'b1;
+        else if(  H_PixelCount == PixelForHS ) begin
+            V_PixelCount      <=  V_PixelCount + 1'b1;
+            H_PixelCount      <=  16'b0;
             end
-        else if(  LineCount  == LineForVS  ) begin
-            LineCount       <=  16'b0;
-            PixelCount      <=  16'b0;
-            end
-        else
-            PixelCount      <=  PixelCount + 1'b1;
-    end
-
-    always @(  posedge PixelClk or negedge nRST  )begin
-        if( !nRST ) begin
-            Data_R <= 9'b0;
-            Data_G <= 9'b0;
-            Data_B <= 9'b0;
+        else if(  V_PixelCount == PixelForVS ) begin
+            V_PixelCount      <=  16'b0;
+            H_PixelCount      <=  16'b0;
             end
         else begin
-            end
+            V_PixelCount      <=  V_PixelCount ;
+            H_PixelCount      <=  H_PixelCount + 1'b1;
+        end
     end
 
-//Here note the negative polarity of HSYNC and VSYNC
-assign  LCD_HSYNC = (( PixelCount >= H_Pluse)&&( PixelCount <= (PixelForHS-H_FrontPorch))) ? 1'b0 : 1'b1;
-assign  LCD_VSYNC = ((( LineCount  >= V_Pluse)&&( LineCount  <= (LineForVS-0) )) ) ? 1'b0 : 1'b1;
+    // SYNC-DE MODE
+  
+    assign  LCD_HSYNC = H_PixelCount <= (PixelForHS-H_FrontPorch) ? 1'b0 : 1'b1;
 
-assign  LCD_DE = (  ( PixelCount >= H_BackPorch )&&
-                    ( PixelCount <= PixelForHS-H_FrontPorch ) &&
-                    ( LineCount >= V_BackPorch ) &&
-                    ( LineCount <= LineForVS-V_FrontPorch-1 ))  ? 1'b1 : 1'b0;
-                    //It will shake if there not minus one
+    assign  LCD_VSYNC = V_PixelCount  <= (PixelForVS-0)  ? 1'b0 : 1'b1;
 
-localparam          Colorbar_width   =   WidthPixel / 16;
+    assign  LCD_DE =    ( H_PixelCount >= H_BackPorch ) && ( H_PixelCount <= H_Pixel_Valid + H_BackPorch ) &&
+                        ( V_PixelCount >= V_BackPorch ) && ( V_PixelCount <= V_Pixel_Valid + V_BackPorch ) && PixelClk;
 
-assign  LCD_R     = ( PixelCount < ( H_BackPorch +  Colorbar_width * 0  )) ? 5'b00000 :
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 1  )) ? 5'b00001 : 
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 2  )) ? 5'b00010 :    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 3  )) ? 5'b00100 :    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 4  )) ? 5'b01000 :    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 5  )) ? 5'b10000 :  5'b00000;
+    // color bar
+    localparam          Colorbar_width   =   H_Pixel_Valid / 16;
 
-assign  LCD_G    =  ( PixelCount < ( H_BackPorch +  Colorbar_width * 6  )) ? 6'b000001: 
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 7  )) ? 6'b000010:    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 8  )) ? 6'b000100:    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 9  )) ? 6'b001000:    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 10 )) ? 6'b010000:    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 11 )) ? 6'b100000:  6'b000000;
+    assign  LCD_R     = ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 0  )) ? 5'b00000 :
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 1  )) ? 5'b00001 : 
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 2  )) ? 5'b00010 :    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 3  )) ? 5'b00100 :    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 4  )) ? 5'b01000 :    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 5  )) ? 5'b10000 :  5'b00000;
 
-assign  LCD_B    =  ( PixelCount < ( H_BackPorch +  Colorbar_width * 12 )) ? 5'b00001 : 
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 13 )) ? 5'b00010 :    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 14 )) ? 5'b00100 :    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 15 )) ? 5'b01000 :    
-                    ( PixelCount < ( H_BackPorch +  Colorbar_width * 16 )) ? 5'b10000 :  5'b00000;
+    assign  LCD_G    =  ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 6  )) ? 6'b000001: 
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 7  )) ? 6'b000010:    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 8  )) ? 6'b000100:    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 9  )) ? 6'b001000:    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 10 )) ? 6'b010000:    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 11 )) ? 6'b100000:  6'b000000;
+
+    assign  LCD_B    =  ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 12 )) ? 5'b00001 : 
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 13 )) ? 5'b00010 :    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 14 )) ? 5'b00100 :    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 15 )) ? 5'b01000 :    
+                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 16 )) ? 5'b10000 :  5'b00000;
 
 endmodule
