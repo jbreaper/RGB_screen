@@ -1,87 +1,94 @@
+/*
+ * VGA Controller Module
+ * Resolution: 480x272 pixels
+ * Features: 
+ * - Generates sync signals for LCD
+ * - Creates 8-color test pattern
+ * - Handles display timing
+ */
 module VGAMod
 (
-    input                   CLK,
-    input                   nRST,
+    // Clock and Control
+    input                   CLK,        // System clock (200MHz)
+    input                   nRST,       // Active low reset
+    input                   PixelClk,   // Pixel clock (33MHz)
 
-    input                   PixelClk,
+    // LCD Control Signals
+    output                  LCD_DE,     // Display Enable
+    output                  LCD_HSYNC,  // Horizontal sync
+    output                  LCD_VSYNC,  // Vertical sync
 
-    output                  LCD_DE,
-    output                  LCD_HSYNC,
-    output                  LCD_VSYNC,
-
-    output          [4:0]   LCD_B,
-    output          [5:0]   LCD_G,
-    output          [4:0]   LCD_R
+    // LCD Color Output
+    output          [4:0]   LCD_B,     // Blue channel  (5-bit)
+    output          [5:0]   LCD_G,     // Green channel (6-bit)
+    output          [4:0]   LCD_R      // Red channel   (5-bit)
 );
 
-    // Horizen count to Hsync, then next Horizen line.
-
-    parameter       H_Pixel_Valid    = 16'd480; 
-    parameter       H_FrontPorch     = 16'd50;
-    parameter       H_BackPorch      = 16'd30;  
-
+    // Horizontal Timing Parameters (in pixels)
+    parameter       H_Pixel_Valid    = 16'd480;    // Active display width
+    parameter       H_FrontPorch     = 16'd50;     // Front porch
+    parameter       H_BackPorch      = 16'd30;     // Back porch
     parameter       PixelForHS       = H_Pixel_Valid + H_FrontPorch + H_BackPorch;
 
-    parameter       V_Pixel_Valid    = 16'd272; 
-    parameter       V_FrontPorch     = 16'd20;  
-    parameter       V_BackPorch      = 16'd5;    
-
+    // Vertical Timing Parameters (in lines)
+    parameter       V_Pixel_Valid    = 16'd272;    // Active display height
+    parameter       V_FrontPorch     = 16'd20;     // Front porch
+    parameter       V_BackPorch      = 16'd5;      // Back porch
     parameter       PixelForVS       = V_Pixel_Valid + V_FrontPorch + V_BackPorch;
 
-    // Horizen pixel count
+    // Pixel Counters
+    reg         [15:0]  H_PixelCount;    // Horizontal pixel position
+    reg         [15:0]  V_PixelCount;    // Vertical line position
 
-    reg         [15:0]  H_PixelCount;
-    reg         [15:0]  V_PixelCount;
-
-    always @(  posedge PixelClk or negedge nRST  )begin
-        if( !nRST ) begin
+    // Pixel Counter Logic
+    always @(posedge PixelClk or negedge nRST) begin
+        if (!nRST) begin
+            // Reset counters
             V_PixelCount      <=  16'b0;    
             H_PixelCount      <=  16'b0;
-            end
-        else if(  H_PixelCount == PixelForHS ) begin
+        end
+        else if (H_PixelCount == PixelForHS) begin
+            // End of line reached
             V_PixelCount      <=  V_PixelCount + 1'b1;
             H_PixelCount      <=  16'b0;
-            end
-        else if(  V_PixelCount == PixelForVS ) begin
+        end
+        else if (V_PixelCount == PixelForVS) begin
+            // End of frame reached
             V_PixelCount      <=  16'b0;
             H_PixelCount      <=  16'b0;
-            end
+        end
         else begin
-            V_PixelCount      <=  V_PixelCount ;
+            // Normal pixel increment
+            V_PixelCount      <=  V_PixelCount;
             H_PixelCount      <=  H_PixelCount + 1'b1;
         end
     end
 
-    // SYNC-DE MODE
-  
+    // Generate Sync Signals
     assign  LCD_HSYNC = H_PixelCount <= (PixelForHS-H_FrontPorch) ? 1'b0 : 1'b1;
+    assign  LCD_VSYNC = V_PixelCount <= (PixelForVS-0) ? 1'b0 : 1'b1;
 
-    assign  LCD_VSYNC = V_PixelCount  <= (PixelForVS-0)  ? 1'b0 : 1'b1;
+    // Generate Display Enable
+    assign  LCD_DE = (H_PixelCount >= H_BackPorch) && 
+                     (H_PixelCount <= H_Pixel_Valid + H_BackPorch) &&
+                     (V_PixelCount >= V_BackPorch) && 
+                     (V_PixelCount <= V_Pixel_Valid + V_BackPorch);
 
-    assign  LCD_DE =    ( H_PixelCount >= H_BackPorch ) && ( H_PixelCount <= H_Pixel_Valid + H_BackPorch ) &&
-                        ( V_PixelCount >= V_BackPorch ) && ( V_PixelCount <= V_Pixel_Valid + V_BackPorch ) && PixelClk;
+    // Color Bar Pattern Generation
+    localparam    Colorbar_width = H_Pixel_Valid / 16;    // Width of each color bar
+    wire          display_active = LCD_DE;                 // Active display area
+    wire [15:0]   active_pixel = H_PixelCount - H_BackPorch;  // Current pixel position
 
-    // color bar
-    localparam          Colorbar_width   =   H_Pixel_Valid / 16;
-
-    assign  LCD_R     = ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 0  )) ? 5'b00000 :
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 1  )) ? 5'b00001 : 
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 2  )) ? 5'b00010 :    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 3  )) ? 5'b00100 :    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 4  )) ? 5'b01000 :    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 5  )) ? 5'b10000 :  5'b00000;
-
-    assign  LCD_G    =  ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 6  )) ? 6'b000001: 
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 7  )) ? 6'b000010:    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 8  )) ? 6'b000100:    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 9  )) ? 6'b001000:    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 10 )) ? 6'b010000:    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 11 )) ? 6'b100000:  6'b000000;
-
-    assign  LCD_B    =  ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 12 )) ? 5'b00001 : 
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 13 )) ? 5'b00010 :    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 14 )) ? 5'b00100 :    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 15 )) ? 5'b01000 :    
-                        ( H_PixelCount < ( H_BackPorch +  Colorbar_width * 16 )) ? 5'b10000 :  5'b00000;
+    // Generate Color Pattern
+    // Format: {5-bit Red, 6-bit Green, 5-bit Blue}
+    assign {LCD_R, LCD_G, LCD_B} = (!display_active) ? 16'b0 :
+        (active_pixel < Colorbar_width * 2)  ? {5'h1F, 6'h00, 5'h00} : // Red
+        (active_pixel < Colorbar_width * 4)  ? {5'h00, 6'h3F, 5'h00} : // Green
+        (active_pixel < Colorbar_width * 6)  ? {5'h00, 6'h00, 5'h1F} : // Blue
+        (active_pixel < Colorbar_width * 8)  ? {5'h1F, 6'h3F, 5'h00} : // Yellow
+        (active_pixel < Colorbar_width * 10) ? {5'h1F, 6'h00, 5'h1F} : // Magenta
+        (active_pixel < Colorbar_width * 12) ? {5'h00, 6'h3F, 5'h1F} : // Cyan
+        (active_pixel < Colorbar_width * 14) ? {5'h1F, 6'h3F, 5'h1F} : // White
+                                              {5'h10, 6'h20, 5'h10};    // Gray
 
 endmodule
